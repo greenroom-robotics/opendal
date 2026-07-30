@@ -45,6 +45,7 @@ pub fn tests(op: &Operator, tests: &mut Vec<Trial>) {
             test_write_with_if_none_match,
             test_write_with_if_not_exists,
             test_write_with_if_match,
+            test_writer_with_if_match,
             test_writer_with_if_not_exists,
             test_write_with_user_metadata,
             test_write_returns_metadata,
@@ -805,6 +806,43 @@ pub async fn test_write_with_if_match(op: Operator) -> Result<()> {
         .write_with(&path_a, content_a.clone())
         .if_match(etag_b)
         .await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().kind(), ErrorKind::ConditionNotMatch);
+
+    Ok(())
+}
+
+/// Write a file through a multi-chunk writer with if_match will get a
+/// ConditionNotMatch error if file's etag does not match.
+pub async fn test_writer_with_if_match(op: Operator) -> Result<()> {
+    let cap = op.info().capability();
+    if !(cap.write_with_if_match && cap.write_can_multi) {
+        return Ok(());
+    }
+
+    let path = TEST_FIXTURE.new_file_path();
+    let size = 5 * 1024 * 1024; // write file with 5 MiB chunks
+    let content_a = gen_fixed_bytes(size);
+    let content_b = gen_fixed_bytes(size);
+
+    op.write(&path, content_a.clone()).await?;
+    let meta = op.stat(&path).await?;
+    let etag = meta.etag().expect("etag must exist").to_string();
+
+    // Should succeed: writing multiple chunks with the current etag.
+    let mut w = op.writer_with(&path).if_match(&etag).await?;
+    w.write(content_a.clone()).await?;
+    w.write(content_b.clone()).await?;
+    w.close().await?;
+
+    let meta = op.stat(&path).await.expect("stat must succeed");
+    assert_eq!(meta.content_length(), (size * 2) as u64);
+
+    // Should fail: the etag is now stale.
+    let mut w = op.writer_with(&path).if_match(&etag).await?;
+    w.write(content_a.clone()).await?;
+    w.write(content_b.clone()).await?;
+    let res = w.close().await;
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().kind(), ErrorKind::ConditionNotMatch);
 

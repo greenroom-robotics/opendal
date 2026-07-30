@@ -306,6 +306,10 @@ impl AzblobCore {
             req = req.header(IF_NONE_MATCH, v);
         }
 
+        if let Some(if_match) = args.if_match() {
+            req = req.header(IF_MATCH, if_match);
+        }
+
         if let Some(cache_control) = args.cache_control() {
             req = req.header(constants::X_MS_BLOB_CACHE_CONTROL, cache_control);
         }
@@ -594,6 +598,10 @@ impl AzblobCore {
 
         if let Some(if_none_match) = args.if_none_match() {
             req = req.header(IF_NONE_MATCH, if_none_match);
+        }
+
+        if let Some(if_match) = args.if_match() {
+            req = req.header(IF_MATCH, if_match);
         }
 
         let content = quick_xml::se::to_string(&PutBlockListRequest {

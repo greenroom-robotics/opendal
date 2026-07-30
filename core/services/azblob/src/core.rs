@@ -586,6 +586,16 @@ impl AzblobCore {
             req = req.header(constants::X_MS_BLOB_CACHE_CONTROL, cache_control);
         }
 
+        // Specify the wildcard character (*) to perform the operation only if
+        // the resource does not exist, and fail the operation if it does exist.
+        if args.if_not_exists() {
+            req = req.header(IF_NONE_MATCH, "*");
+        }
+
+        if let Some(if_none_match) = args.if_none_match() {
+            req = req.header(IF_NONE_MATCH, if_none_match);
+        }
+
         let content = quick_xml::se::to_string(&PutBlockListRequest {
             latest: block_ids
                 .into_iter()
